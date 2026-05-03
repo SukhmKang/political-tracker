@@ -37,7 +37,7 @@ export function makeEntityNode(
     id: entityNodeId(entity.id),
     type: "entity",
     position: { x: 0, y: 0 },
-    draggable: false,
+    draggable: true,
     data: {
       kind: "entity",
       entityId: entity.id,

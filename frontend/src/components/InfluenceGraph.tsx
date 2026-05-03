@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Background, Controls, ReactFlow, type ReactFlowInstance } from "@xyflow/react";
+import { Background, Controls, ReactFlow, applyNodeChanges, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./influenceGraph/InfluenceGraph.css";
 import { apiGet, apiGetOptional, apiPost } from "./influenceGraph/api";
@@ -59,6 +59,8 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
   const [selectedRelationshipDetails, setSelectedRelationshipDetails] = useState<RelationshipDetail[] | null>(null);
   const [degreeCache, setDegreeCache] = useState<Record<number, DegreeCounts>>({});
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [manualPositions, setManualPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [renderedNodes, setRenderedNodes] = useState<AppNode[]>([]);
   const [loadingSeed, setLoadingSeed] = useState(true);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<AppNode, AppEdge> | null>(null);
   const [showEdgeLabels, setShowEdgeLabels] = useState(false);
@@ -165,6 +167,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
     setLoadingSeed(true);
     setBaseNode(null);
     setExpansions({});
+    setManualPositions({});
     setSelectedNodeIds(new Set());
     setSelectedEntityId(entityId);
     setSelectedProfile(null);
@@ -315,6 +318,17 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
     () => layoutGraph(visibleNodes, visibleEdges, expansionList),
     [expansionList, visibleEdges, visibleNodes],
   );
+  const displayedNodes = useMemo(
+    () =>
+      layoutedNodes.map((node) => ({
+        ...node,
+        position: manualPositions[node.id] ?? node.position,
+      })),
+    [layoutedNodes, manualPositions],
+  );
+  useEffect(() => {
+    setRenderedNodes(displayedNodes);
+  }, [displayedNodes]);
   const viewportKey = useMemo(
     () => `${layoutedNodes.map((node) => node.id).join("|")}::${visibleEdges.map((edge) => edge.id).join("|")}`,
     [layoutedNodes, visibleEdges],
@@ -602,11 +616,16 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
     });
 
     if (selectedEntityId && selectedNodeIds.has(entityNodeId(selectedEntityId))) {
-      setSelectedEntityId(null);
-      setSelectedProfile(null);
-      setLoadingSelectedProfile(false);
+        setSelectedEntityId(null);
+        setSelectedProfile(null);
+        setLoadingSelectedProfile(false);
     }
 
+    setManualPositions((current) => {
+      const next = { ...current };
+      selectedNodeIds.forEach((nodeId) => delete next[nodeId]);
+      return next;
+    });
     setSelectedNodeIds(new Set());
   }, [selectedEntityId, selectedNodeIds]);
 
@@ -753,12 +772,21 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
           <GraphEmptyOverlay message="No loaded nodes match the current filters." />
         )}
         <ReactFlow
-          nodes={layoutedNodes}
+          nodes={renderedNodes}
           edges={visibleEdges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
+          onNodesChange={(changes: NodeChange<AppNode>[]) => {
+            setRenderedNodes((current) => applyNodeChanges(changes, current) as AppNode[]);
+          }}
           onNodeClick={onNodeClick}
           onNodeContextMenu={onNodeContextMenu}
+          onNodeDragStop={(_, node) => {
+            setManualPositions((current) => ({
+              ...current,
+              [node.id]: node.position,
+            }));
+          }}
           onPaneClick={() => {
             setSelectedNodeIds(new Set());
             setContextMenu(null);
@@ -773,7 +801,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
           <Background color="#cbd5e1" gap={24} />
           <Controls />
         </ReactFlow>
-        <GraphLegend />
+        <GraphLegend onRearrange={() => setManualPositions({})} />
         {contextMenu && (
           <NodeContextMenu
             x={contextMenu.x}

@@ -102,10 +102,19 @@ export function GraphEmptyOverlay({ message }: { message: string }) {
   );
 }
 
-export function GraphLegend() {
+export function GraphLegend({ onRearrange }: { onRearrange: () => void }) {
   return (
-    <div className="pointer-events-none absolute bottom-4 left-4 z-10 rounded-md border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-sm">
-      <div className="mb-2 font-semibold text-slate-900">Legend</div>
+    <div className="absolute bottom-4 left-4 z-10 rounded-md border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-700 shadow-sm">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="font-semibold text-slate-900">Legend</div>
+        <button
+          type="button"
+          className="rounded border border-slate-200 bg-white px-2 py-1 font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-950"
+          onClick={onRearrange}
+        >
+          Rearrange
+        </button>
+      </div>
       <div className="grid gap-1.5">
         <div className="flex items-center gap-2">
           <span className="h-3 w-5 rounded-sm border border-slate-300 bg-white" />
