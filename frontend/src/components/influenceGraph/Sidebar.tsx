@@ -7,6 +7,7 @@ interface SidebarProps {
   error: string | null;
   loadingSeed: boolean;
   loadingProfile: boolean;
+  hasNodes: boolean;
   isExaOnly: boolean;
   incomingTotal?: number | null;
   outgoingTotal?: number | null;
@@ -26,6 +27,7 @@ export function Sidebar({
   error,
   loadingSeed,
   loadingProfile,
+  hasNodes,
   isExaOnly,
   incomingTotal,
   outgoingTotal,
@@ -43,6 +45,8 @@ export function Sidebar({
       <div className="ig-sidebar-header">
         {loadingSeed ? (
           <div className="h-6 w-56 animate-pulse rounded bg-slate-200" />
+        ) : !hasNodes ? (
+          <div className="h-6" />
         ) : (
           <div>
             <h1 className="truncate text-lg font-semibold">{title}</h1>
@@ -53,7 +57,7 @@ export function Sidebar({
       </div>
 
       <div className="ig-sidebar-body">
-        {loadingSeed ? (
+        {!hasNodes && !loadingSeed ? null : loadingSeed ? (
           <SidebarSkeleton />
         ) : !isExaOnly ? (
           <dl className="grid grid-cols-2 gap-3 text-sm">

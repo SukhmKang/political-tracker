@@ -735,6 +735,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
         error={error}
         loadingSeed={loadingSeed}
         loadingProfile={loadingSelectedProfile}
+        hasNodes={graphNodes.length > 0}
         isExaOnly={Boolean(isSelectedExaOnly)}
         incomingTotal={detailProfile?.finance.incoming_total}
         outgoingTotal={detailProfile?.finance.outgoing_total}
