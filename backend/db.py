@@ -29,7 +29,14 @@ async def lifespan(app):
         DB_URL,
         min_size=DB_POOL_MIN_SIZE,
         max_size=DB_POOL_MAX_SIZE,
-        kwargs={"autocommit": True},
+        max_idle=300,  # retire idle connections after 5 min before Neon's pooler drops them
+        kwargs={
+            "autocommit": True,
+            "keepalives": 1,
+            "keepalives_idle": 60,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
+        },
         open=False,
     )
     await _pool.open()

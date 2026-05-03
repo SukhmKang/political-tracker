@@ -102,7 +102,6 @@ export default function App() {
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200 bg-white px-5">
         <div>
           <div className="text-sm font-semibold text-slate-950">State Political Tracker</div>
-          <div className="text-xs text-slate-500">Influence graph demo</div>
         </div>
         <div ref={searchRef} className="relative w-80">
           <label className="sr-only" htmlFor="entity-search">
