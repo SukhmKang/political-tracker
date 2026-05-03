@@ -1,6 +1,9 @@
 BEGIN;
 
--- Build merge map using window functions — avoids the slow EXISTS correlated subquery
+-- More memory for sorts and hash joins — reduces disk spills on large window functions
+SET LOCAL work_mem = '512MB';
+
+-- Build merge map — one pass over entities using window functions, no correlated subquery
 CREATE TEMP TABLE _merge_map AS
 SELECT id AS discard_id, keep_id
 FROM (
@@ -46,7 +49,7 @@ WHERE oe.target_entity_id = mm.discard_id;
 DELETE FROM unified.official_edges
 WHERE source_entity_id = target_entity_id;
 
--- 5. Deduplicate edges — ROW_NUMBER() is much faster than NOT IN
+-- 5. Deduplicate edges — scoped to affected keep_ids, ROW_NUMBER avoids NOT IN scan
 DELETE FROM unified.official_edges a
 USING (
     SELECT id,
@@ -56,10 +59,12 @@ USING (
            ) AS rn
     FROM unified.official_edges
     WHERE source_row_id IS NOT NULL
+      AND (source_entity_id IN (SELECT keep_id FROM _merge_map)
+           OR target_entity_id IN (SELECT keep_id FROM _merge_map))
 ) b
 WHERE a.id = b.id AND b.rn > 1;
 
--- 6. Remap inferred_edges seed + target
+-- 6. Remap inferred_edges seed + target (likely empty, fast)
 UPDATE unified.inferred_edges ie
 SET seed_entity_id = mm.keep_id
 FROM _merge_map mm
@@ -78,7 +83,7 @@ WHERE id NOT IN (
     GROUP BY seed_entity_id, target_entity_id, relationship_type
 );
 
--- 7. Remap entity_mentions (has index on entity_id — fast)
+-- 7. Remap entity_mentions (index on entity_id — fast)
 UPDATE unified.entity_mentions em
 SET entity_id = mm.keep_id
 FROM _merge_map mm

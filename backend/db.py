@@ -10,7 +10,8 @@ from psycopg_pool import AsyncConnectionPool
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-DB_URL = os.environ["DB_URL"]
+_branch = os.environ.get("NEON_BRANCH", "").upper()
+DB_URL = os.environ[f"DB_URL_{_branch}"] if _branch else os.environ["DB_URL"]
 DB_POOL_MIN_SIZE = int(os.environ.get("DB_POOL_MIN_SIZE", "1"))
 DB_POOL_MAX_SIZE = int(os.environ.get("DB_POOL_MAX_SIZE", "10"))
 
