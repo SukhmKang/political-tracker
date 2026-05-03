@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+psycopg[binary]
+psycopg-pool
+pydantic
+python-dotenv
+google-genai
+exa-py
+openai-agents
+asyncio
