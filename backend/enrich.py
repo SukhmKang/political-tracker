@@ -38,7 +38,7 @@ _OUTPUT_SCHEMA = """\
   "recent_news": [
     {"headline": "...", "url": "...", "date": "YYYY-MM-DD or null", "summary": "..."}
   ],
-  "sources": [
+    "sources": [
     {"url": "...", "domain": "...", "used_for": "which field this source informed"}
   ]
 }"""
@@ -54,6 +54,9 @@ Your job:
 5. For recent_news, keep at most 3 significant articles from the last 2 years when available. Discard articles that do not explicitly name the entity.
 6. If no credible value was found for a field, set it to null.
 7. description should be 1-2 dry, factual sentences. State concrete facts: role, office, state, party, notable actions. Avoid vague superlatives and filler.
+8. Use the disambiguation hints only to identify the correct real-world entity. Do not invent facts from hints alone.
+9. If search results appear to describe a different person or organization than the hints/state/entity type, discard those results.
+10. If the name cannot be confidently disambiguated, return the schema with all scalar fields null, recent_news [], and sources []. Do not enrich the wrong entity.
 
 Return ONLY valid JSON — no preamble, no markdown fences:
 """ + _OUTPUT_SCHEMA
@@ -146,6 +149,7 @@ async def _synthesize(
     entity_name: str,
     entity_type: str,
     state: str | None,
+    hints: dict,
     search_results: list[dict],
 ) -> dict:
     relevant_fields = _ENTITY_TYPE_FIELDS.get(entity_type, ["description"])
@@ -161,6 +165,7 @@ async def _synthesize(
         f"Entity type: {entity_type}\n"
         f"State: {state or 'unknown'}\n"
         f"Relevant fields for this entity type: {', '.join(relevant_fields)}\n\n"
+        f"Disambiguation hints: {json.dumps(hints, indent=2)}\n\n"
         f"Search results:\n{combined}"
     )
     result = await Runner.run(agent, prompt, max_turns=2)
@@ -172,13 +177,15 @@ async def enrich_entity(
     entity_name: str,
     entity_type: str,
     state: str | None,
+    hints: dict | None = None,
 ) -> dict:
     print(f"[*] Enriching '{entity_name}' (type={entity_type}, state={state})", file=sys.stderr)
+    hints = hints or {"connected_entities": [], "source_domains": []}
 
     search_results = await _run_searches(entity_name, entity_type, state)
     if not any(result.get("results") and not result.get("error") for result in search_results):
         raise RuntimeError("All enrichment searches failed — no data available to synthesize")
 
-    result = await _synthesize(entity_name, entity_type, state, search_results)
+    result = await _synthesize(entity_name, entity_type, state, hints, search_results)
     print(f"[+] Enrichment complete for '{entity_name}'", file=sys.stderr)
     return result

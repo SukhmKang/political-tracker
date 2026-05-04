@@ -36,6 +36,48 @@ def _row_to_enrichment(r: tuple) -> EntityEnrichment:
     )
 
 
+async def _enrichment_hints(conn, entity_id: int) -> dict:
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            SELECT
+                CASE
+                    WHEN seed_entity_id = %s THEN target_name
+                    ELSE seed_entity_name
+                END AS connected_name
+            FROM unified.inferred_edges
+            WHERE seed_entity_id = %s OR target_entity_id = %s
+            ORDER BY created_at DESC
+            LIMIT 12
+            """,
+            (entity_id, entity_id, entity_id),
+        )
+        connected_names = []
+        for (name,) in await cur.fetchall():
+            if name and name not in connected_names:
+                connected_names.append(name)
+
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """
+            SELECT DISTINCT unnest(COALESCE(source_domains, '{}')) AS domain
+            FROM unified.inferred_edges
+            WHERE seed_entity_id = %s OR target_entity_id = %s
+            LIMIT 12
+            """,
+            (entity_id, entity_id),
+        )
+        source_domains = []
+        for (domain,) in await cur.fetchall():
+            if domain and domain not in source_domains:
+                source_domains.append(domain)
+
+    return {
+        "connected_entities": connected_names[:3],
+        "source_domains": source_domains[:3],
+    }
+
+
 @router.post("/entities/{entity_id}/enrich", response_model=EntityEnrichment)
 async def enrich_entity(entity_id: int):
     conn = await db()
@@ -51,9 +93,10 @@ async def enrich_entity(entity_id: int):
         raise HTTPException(status_code=404, detail=f"Entity {entity_id} not found")
 
     entity_name, entity_type, state = row
+    hints = await _enrichment_hints(conn, entity_id)
 
     try:
-        result = await run_enrichment(entity_name, entity_type or "organization", state)
+        result = await run_enrichment(entity_name, entity_type or "organization", state, hints)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Enrichment failed: {exc}") from exc
 
