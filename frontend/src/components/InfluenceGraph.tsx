@@ -93,7 +93,9 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
 
   const profileRequestId = useRef(0);
   const enrichmentRequestIds = useRef<Set<number>>(new Set());
+  const enrichmentCacheRef = useRef(enrichmentCache);
   const graphHasKeyboardFocus = useRef(false);
+  enrichmentCacheRef.current = enrichmentCache;
 
   const expansionList = useMemo(() => Object.values(expansions), [expansions]);
 
@@ -129,7 +131,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
         const inferredLimit =
           typeof limit === "number" ? Math.max(0, limit - Math.max(0, connectedIds.size - 1)) : 8;
         const inferredNodes =
-          direction === "outgoing" && showInferred
+          direction === "outgoing"
             ? inferred.slice(0, inferredLimit).map((edge) =>
                 makeEntityNode(
                   {
@@ -151,7 +153,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
         ];
         const edges = [
           ...directedEdges.map(makeEdge),
-          ...(direction === "outgoing" && showInferred
+          ...(direction === "outgoing"
             ? inferred.slice(0, inferredLimit).map((edge) => makeInferredEdge(edge, originEntityId))
             : []),
         ];
@@ -177,7 +179,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
         setLoadingExpansion(null);
       }
     },
-    [expansions, showInferred],
+    [expansions],
   );
 
   useEffect(() => {
@@ -301,7 +303,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
       graphEdges
         .filter((edge) => {
           if (!visibleNodeIds.has(edge.source) || !visibleNodeIds.has(edge.target)) return false;
-          return showInferred || !edge.id.startsWith("inferred-");
+          return showInferred || edge.data?.status !== "inferred";
         })
         .map((edge) => {
           const amount = typeof edge.data?.amount === "number" ? edge.data.amount : null;
@@ -430,7 +432,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
       return;
     }
 
-    const cachedEnrichment = enrichmentCache[selectedEntityId];
+    const cachedEnrichment = enrichmentCacheRef.current[selectedEntityId];
     if (cachedEnrichment) {
       setSelectedEnrichment(cachedEnrichment);
       setLoadingEnrichment(false);
@@ -487,7 +489,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
     return () => {
       cancelled = true;
     };
-  }, [enrichmentCache, selectedEntityId, showInferred]);
+  }, [selectedEntityId, showInferred]);
 
   async function onNodeClick(event: React.MouseEvent, node: AppNode) {
     setContextMenu(null);

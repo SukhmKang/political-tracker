@@ -25,14 +25,6 @@ class EntitySearchResult(BaseModel):
     score: float
 
 
-class CounterpartyEntry(BaseModel):
-    entity_id: int
-    name: Optional[str]
-    type: Optional[str]
-    total_amount: float
-    edge_count: int
-
-
 class RecentEdge(BaseModel):
     edge_id: int
     direction: str
@@ -53,8 +45,6 @@ class Finance(BaseModel):
     outgoing_count: int
     unique_sources: int
     unique_targets: int
-    top_sources: list[CounterpartyEntry]
-    top_targets: list[CounterpartyEntry]
     recent_edges: list[RecentEdge]
 
 

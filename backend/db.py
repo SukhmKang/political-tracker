@@ -30,6 +30,7 @@ async def lifespan(app):
         min_size=DB_POOL_MIN_SIZE,
         max_size=DB_POOL_MAX_SIZE,
         max_idle=300,  # retire idle connections after 5 min before Neon's pooler drops them
+        check=AsyncConnectionPool.check_connection,  # health-check before returning stale connections
         kwargs={
             "autocommit": True,
             "keepalives": 1,

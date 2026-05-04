@@ -211,21 +211,25 @@ def _strip_fences(raw: str) -> str:
 
 
 async def _run_subagent(name: str, instructions: str, tools: list, entity: str) -> dict:
-    async with _SEM:
-        agent = Agent(
-            name=name,
-            model="gpt-5-mini",
-            model_settings=ModelSettings(reasoning={"effort": "low"}, parallel_tool_calls=True, max_tokens=4096),
-            instructions=instructions,
-            tools=tools,
-        )
-        result = await Runner.run(agent, f"Find connections for: {entity}", max_turns=30)
-    raw = _strip_fences(result.final_output)
+    _EMPTY = {"subagent": name, "connections": []}
     try:
+        async with _SEM:
+            agent = Agent(
+                name=name,
+                model="gpt-5-mini",
+                model_settings=ModelSettings(reasoning={"effort": "low"}, parallel_tool_calls=True, max_tokens=4096),
+                instructions=instructions,
+                tools=tools,
+            )
+            result = await Runner.run(agent, f"Find connections for: {entity}", max_turns=10)
+        raw = _strip_fences(result.final_output)
         return json.loads(raw)
     except json.JSONDecodeError:
-        print(f"  [!] {name}: JSON parse failed — {raw[:120]}", file=sys.stderr)
-        return {"subagent": name, "connections": []}
+        print(f"  [!] {name}: JSON parse failed — {raw}", file=sys.stderr)
+        return _EMPTY
+    except Exception as exc:
+        print(f"  [!] {name}: failed ({type(exc).__name__}: {exc})", file=sys.stderr)
+        return _EMPTY
 
 
 async def _synthesize(entity: str, subagent_results: list[dict]) -> dict:
@@ -239,6 +243,7 @@ async def _synthesize(entity: str, subagent_results: list[dict]) -> dict:
     result = await Runner.run(
         agent,
         f"Entity: {entity}\n\nSubagent outputs:\n{combined}",
+        max_turns=2,
     )
     raw = _strip_fences(result.final_output)
     return json.loads(raw)
@@ -252,6 +257,12 @@ async def _scan_entity(entity: str) -> dict:
         for name, instructions, tools in _SUBAGENTS
     ]
     subagent_results: list[dict] = await asyncio.gather(*tasks)
+
+    useful = [r for r in subagent_results if r.get("connections")]
+    if not useful:
+        print(f"  [!] All subagents failed for '{entity}' — skipping synthesis", file=sys.stderr)
+        return {"entity": entity, "connections": [], "suggested_expansions": []}
+
     result = await _synthesize(entity, subagent_results)
     n = len(result.get("connections", []))
     expansions = result.get("suggested_expansions", [])

@@ -169,26 +169,30 @@ async def _run_subagent(
     entity_type: str,
     state: str | None,
 ) -> dict:
-    async with _SEM:
-        agent = Agent(
-            name=name,
-            model="gpt-4o-mini",
-            model_settings=ModelSettings(parallel_tool_calls=True),
-            instructions=instructions,
-            tools=tools,
-        )
-        prompt = (
-            f"Entity name: {entity_name}\n"
-            f"Entity type: {entity_type}\n"
-            f"State: {state or 'unknown'}"
-        )
-        result = await Runner.run(agent, prompt, max_turns=15)
-    raw = _strip_fences(result.final_output)
+    _EMPTY = {"subagent": name, "facts": [], "recent_news": []}
     try:
+        async with _SEM:
+            agent = Agent(
+                name=name,
+                model="gpt-4o-mini",
+                model_settings=ModelSettings(parallel_tool_calls=True),
+                instructions=instructions,
+                tools=tools,
+            )
+            prompt = (
+                f"Entity name: {entity_name}\n"
+                f"Entity type: {entity_type}\n"
+                f"State: {state or 'unknown'}"
+            )
+            result = await Runner.run(agent, prompt, max_turns=8)
+        raw = _strip_fences(result.final_output)
         return json.loads(raw)
     except json.JSONDecodeError:
-        print(f"  [!] {name}: JSON parse failed — {raw[:120]}", file=sys.stderr)
-        return {"subagent": name, "facts": [], "recent_news": []}
+        print(f"  [!] {name}: JSON parse failed — {raw}", file=sys.stderr)
+        return _EMPTY
+    except Exception as exc:
+        print(f"  [!] {name}: failed ({type(exc).__name__}: {exc})", file=sys.stderr)
+        return _EMPTY
 
 
 async def _synthesize(
@@ -212,7 +216,7 @@ async def _synthesize(
         f"Relevant fields for this entity type: {', '.join(relevant_fields)}\n\n"
         f"Subagent outputs:\n{combined}"
     )
-    result = await Runner.run(agent, prompt, max_turns=5)
+    result = await Runner.run(agent, prompt, max_turns=2)
     raw = _strip_fences(result.final_output)
     return json.loads(raw)
 
@@ -229,6 +233,10 @@ async def enrich_entity(
         for name, instructions, tools in _SUBAGENTS
     ]
     subagent_results = await asyncio.gather(*tasks)
+
+    useful = [r for r in subagent_results if r.get("facts") or r.get("recent_news")]
+    if not useful:
+        raise RuntimeError("All subagents failed — no data available to synthesize")
 
     result = await _synthesize(entity_name, entity_type, state, list(subagent_results))
     print(f"[+] Enrichment complete for '{entity_name}'", file=sys.stderr)

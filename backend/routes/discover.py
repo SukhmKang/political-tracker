@@ -112,47 +112,46 @@ async def discover(req: DiscoverRequest):
         raise HTTPException(status_code=500, detail=f"Agent failed: {exc}") from exc
 
     connections = output.get("connections", [])
-    verified_count = 0
-    inferred_count = 0
 
-    for connection_data in connections:
-        target_name = connection_data.get("target_name", "")
-        target_entity_id, was_existing = await _resolve_entity(
-            conn, target_name, connection_data.get("target_type")
-        )
-        if was_existing:
-            verified_count += 1
-        else:
-            inferred_count += 1
+    resolved = await asyncio.gather(*[
+        _resolve_entity(conn, c.get("target_name", ""), c.get("target_type"))
+        for c in connections
+    ])
 
-        async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                INSERT INTO unified.inferred_edges (
-                    seed_entity_id, seed_entity_name, target_name, target_entity_id,
-                    target_type, relationship_type, evidence_quotes, source_urls,
-                    source_domains, evidence_strength, found_by, depth, found_from,
-                    verified, run_id
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
+    verified_count = sum(1 for _, was_existing in resolved if was_existing)
+    inferred_count = len(resolved) - verified_count
+
+    async with conn.cursor() as cur:
+        await cur.executemany(
+            """
+            INSERT INTO unified.inferred_edges (
+                seed_entity_id, seed_entity_name, target_name, target_entity_id,
+                target_type, relationship_type, evidence_quotes, source_urls,
+                source_domains, evidence_strength, found_by, depth, found_from,
+                verified, run_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            [
                 (
                     seed_entity_id,
                     req.entity_name,
-                    target_name,
+                    c.get("target_name", ""),
                     target_entity_id,
-                    connection_data.get("target_type"),
-                    connection_data.get("relationship_type"),
-                    connection_data.get("evidence_quotes", []),
-                    connection_data.get("source_urls", []),
-                    connection_data.get("source_domains", []),
-                    connection_data.get("evidence_strength"),
-                    connection_data.get("found_by", []),
-                    connection_data.get("depth", 1),
-                    connection_data.get("found_from"),
+                    c.get("target_type"),
+                    c.get("relationship_type"),
+                    c.get("evidence_quotes", []),
+                    c.get("source_urls", []),
+                    c.get("source_domains", []),
+                    c.get("evidence_strength"),
+                    c.get("found_by", []),
+                    c.get("depth", 1),
+                    c.get("found_from"),
                     was_existing,
                     run_id,
-                ),
-            )
+                )
+                for c, (target_entity_id, was_existing) in zip(connections, resolved)
+            ],
+        )
 
     return DiscoverResponse(
         run_id=run_id,

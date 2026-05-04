@@ -183,12 +183,6 @@ export function RelationshipDetailsModal({ edges, onClose }: { edges: Relationsh
                   </div>
                 )}
 
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  {edge.found_by.length > 0 && <span>{edge.found_by.join(", ")}</span>}
-                  {edge.source_domains.length > 0 && edge.found_by.length > 0 && <span>·</span>}
-                  {edge.source_domains.length > 0 && <span>{edge.source_domains.join(", ")}</span>}
-                </div>
-
                 {edge.source_urls.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {edge.source_urls.slice(0, 4).map((url, index) => (
@@ -282,7 +276,7 @@ export function NodeContextMenu({
             className="block w-full border-t border-slate-100 px-3 py-2 text-left font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-950"
             onClick={() => setShowSearchDepth(true)}
           >
-            Expand graph with ith Exa
+            Expand graph with Exa
           </button>
         )
       )}

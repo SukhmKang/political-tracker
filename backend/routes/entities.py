@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from db import db, get_agent_inferred_run_id
 from models import (
-    CounterpartyEntry, EntityInfo, EntityProfile, EntitySearchResult,
+    EntityInfo, EntityProfile, EntitySearchResult,
     Finance, GraphEdge, GraphNode, InferredEdge, InferredEdgesResponse,
     Neighborhood, RecentEdge,
 )
@@ -286,62 +286,25 @@ async def get_entity_profile(entity_id: int):
     async with conn.cursor() as cur:
         await cur.execute(
             """
-            SELECT e.id, e.canonical_name, e.entity_type, SUM(oe.amount), COUNT(*)
-            FROM unified.official_edges oe
-            JOIN unified.entities e ON e.id = oe.source_entity_id
-            WHERE oe.target_entity_id = %s
-            GROUP BY e.id, e.canonical_name, e.entity_type
-            ORDER BY SUM(oe.amount) DESC NULLS LAST LIMIT 10
-            """,
-            (entity_id,),
-        )
-        top_sources = [
-            CounterpartyEntry(entity_id=r[0], name=r[1], type=r[2], total_amount=float(r[3] or 0), edge_count=int(r[4]))
-            for r in await cur.fetchall()
-        ]
-
-    async with conn.cursor() as cur:
-        await cur.execute(
-            """
-            SELECT e.id, e.canonical_name, e.entity_type, SUM(oe.amount), COUNT(*)
-            FROM unified.official_edges oe
-            JOIN unified.entities e ON e.id = oe.target_entity_id
-            WHERE oe.source_entity_id = %s
-            GROUP BY e.id, e.canonical_name, e.entity_type
-            ORDER BY SUM(oe.amount) DESC NULLS LAST LIMIT 10
-            """,
-            (entity_id,),
-        )
-        top_targets = [
-            CounterpartyEntry(entity_id=r[0], name=r[1], type=r[2], total_amount=float(r[3] or 0), edge_count=int(r[4]))
-            for r in await cur.fetchall()
-        ]
-
-    async with conn.cursor() as cur:
-        await cur.execute(
-            """
             SELECT * FROM (
-                SELECT * FROM (
-                    SELECT oe.id, 'incoming' AS direction, oe.source_entity_id,
-                           e.canonical_name, e.entity_type, oe.edge_type,
-                           oe.amount, oe.date, oe.state, oe.description
-                    FROM unified.official_edges oe
-                    JOIN unified.entities e ON e.id = oe.source_entity_id
-                    WHERE oe.target_entity_id = %s
-                    ORDER BY oe.date DESC NULLS LAST LIMIT 20
-                ) incoming
-                UNION ALL
-                SELECT * FROM (
-                    SELECT oe.id, 'outgoing' AS direction, oe.target_entity_id,
-                           e.canonical_name, e.entity_type, oe.edge_type,
-                           oe.amount, oe.date, oe.state, oe.description
-                    FROM unified.official_edges oe
-                    JOIN unified.entities e ON e.id = oe.target_entity_id
-                    WHERE oe.source_entity_id = %s
-                    ORDER BY oe.date DESC NULLS LAST LIMIT 20
-                ) outgoing
-            ) combined
-            ORDER BY date DESC NULLS LAST LIMIT 20
+                SELECT oe.id, 'incoming' AS direction, oe.source_entity_id,
+                       e.canonical_name, e.entity_type, oe.edge_type,
+                       oe.amount, oe.date, oe.state, oe.description
+                FROM unified.official_edges oe
+                JOIN unified.entities e ON e.id = oe.source_entity_id
+                WHERE oe.target_entity_id = %s
+                ORDER BY oe.date DESC NULLS LAST LIMIT 20
+            ) incoming
+            UNION ALL
+            SELECT * FROM (
+                SELECT oe.id, 'outgoing' AS direction, oe.target_entity_id,
+                       e.canonical_name, e.entity_type, oe.edge_type,
+                       oe.amount, oe.date, oe.state, oe.description
+                FROM unified.official_edges oe
+                JOIN unified.entities e ON e.id = oe.target_entity_id
+                WHERE oe.source_entity_id = %s
+                ORDER BY oe.date DESC NULLS LAST LIMIT 20
+            ) outgoing
             """,
             (entity_id, entity_id),
         )
@@ -365,8 +328,6 @@ async def get_entity_profile(entity_id: int):
             outgoing_total=float(stats[3] or 0),
             outgoing_count=int(stats[4] or 0),
             unique_targets=int(stats[5] or 0),
-            top_sources=top_sources,
-            top_targets=top_targets,
             recent_edges=recent_edges,
         ),
     )
