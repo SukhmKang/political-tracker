@@ -27,6 +27,7 @@ export default function App() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const searchRef = useRef<HTMLDivElement | null>(null);
   const selectedQueryRef = useRef<string | null>(null);
+  const searchCache = useRef<Map<string, EntitySearchResult[]>>(new Map());
 
   const trimmedQuery = useMemo(() => query.trim(), [query]);
 
@@ -46,6 +47,13 @@ export default function App() {
       return;
     }
 
+    const cached = searchCache.current.get(trimmedQuery);
+    if (cached) {
+      setResults(cached);
+      setSearchOpen(true);
+      return;
+    }
+
     const controller = new AbortController();
     const timeout = window.setTimeout(() => {
       setLoadingSearch(true);
@@ -58,6 +66,7 @@ export default function App() {
           return response.json() as Promise<EntitySearchResult[]>;
         })
         .then((data) => {
+          searchCache.current.set(trimmedQuery, data);
           setResults(data);
           setSearchOpen(true);
         })
@@ -68,7 +77,7 @@ export default function App() {
         .finally(() => {
           if (!controller.signal.aborted) setLoadingSearch(false);
         });
-    }, 180);
+    }, 350);
 
     return () => {
       controller.abort();

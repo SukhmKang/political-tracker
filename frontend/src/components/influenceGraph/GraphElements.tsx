@@ -38,7 +38,9 @@ function EntityNode({ data, selected }: NodeProps<Node<EntityNodeData>>) {
         onToggle={data.onToggleDirection}
       />
       <div className="ig-node-status">{titleize(data.status)}</div>
-      <div className="ig-node-title">{truncate(data.label, 24)}</div>
+      <div className="ig-node-title" title={data.label}>
+        {truncate(data.label, 24)}
+      </div>
       <div className="ig-node-subtitle">{data.subtitle || "Entity"}</div>
     </div>
   );

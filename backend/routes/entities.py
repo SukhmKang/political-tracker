@@ -67,14 +67,14 @@ async def search_entities(
                    COALESCE(mention_count, 0),
                    word_similarity(lower(%s), normalized_name) AS score
             FROM unified.entities
-            WHERE (normalized_name ILIKE '%%' || lower(%s) || '%%'
-                   OR word_similarity(lower(%s), normalized_name) > 0.3)
+            WHERE normalized_name ILIKE '%%' || lower(%s) || '%%'
+              AND mention_count > 5
               AND (%s::text IS NULL OR entity_type = %s)
               AND (%s::text IS NULL OR state_code = upper(%s))
             ORDER BY score DESC, mention_count DESC
             LIMIT %s
             """,
-            (q, q, q, entity_type, entity_type, state_code, state_code, limit),
+            (q, q, entity_type, entity_type, state_code, state_code, limit),
         )
         rows = await cur.fetchall()
 

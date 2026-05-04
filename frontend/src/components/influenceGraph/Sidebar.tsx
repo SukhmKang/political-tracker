@@ -127,7 +127,6 @@ function ExaEnrichmentPanel({
     ["Employer", enrichment?.employer],
     ["Party", enrichment?.political_party],
     ["Office", enrichment?.office_held],
-    ["Mission", enrichment?.mission],
     ["Founded", enrichment?.founded_year],
     ["Jurisdiction", enrichment?.jurisdiction],
   ].filter(([, value]) => value);
@@ -144,6 +143,14 @@ function ExaEnrichmentPanel({
       ) : enrichment ? (
         <div className={enhancing ? "mt-3 space-y-3" : "space-y-3"}>
           {enrichment.description && <p className="leading-relaxed text-amber-950">{enrichment.description}</p>}
+          {enrichment.mission && (
+            <div className="rounded border border-amber-200 bg-white/70 px-2 py-2">
+              <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-700">Mission</div>
+              <p className="mt-1 leading-relaxed text-amber-950" title={enrichment.mission}>
+                {enrichment.mission}
+              </p>
+            </div>
+          )}
           {detailItems.length > 0 && (
             <dl className="grid grid-cols-2 gap-2">
               {detailItems.map(([label, value]) => (
