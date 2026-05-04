@@ -1,5 +1,9 @@
 # State Political Tracker Demo
 
+## Purpose
+
+This tool is intended for modern-day muckrackers like accountability-focused nonprofits, investigative journalists, think-tanks, government watchdogs, and politically curious onlookers. In the tool, you can search any entity across 19 states' campaign finance data and view its donations as a network. When campaign finance disclosures lead to a dead end in the investigation, you can use an Exa AI agent to expand the graph and find new connections in the influence graph.
+
 ## Structure
 
 - `backend/` - FastAPI API and Exa discovery agent.
