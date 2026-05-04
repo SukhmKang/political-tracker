@@ -716,7 +716,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
     setError(null);
     setExaSearchNotice(null);
     try {
-      const clampedDepth = Math.max(1, Math.min(depth, 5));
+      const clampedDepth = Math.max(1, Math.min(depth, 2));
       const data = await apiPost<DiscoverResponse>("/discover", {
         entity_name: entityName,
         depth: clampedDepth,

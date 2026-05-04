@@ -122,6 +122,12 @@ function ExaEnrichmentPanel({
   loading: boolean;
   enhancing: boolean;
 }) {
+  const hasDisplayValue = (value: unknown) => {
+    if (value == null) return false;
+    if (typeof value !== "string") return true;
+    const normalized = value.trim().toLowerCase();
+    return normalized !== "" && normalized !== "null" && normalized !== "undefined";
+  };
   const detailItems = [
     ["Occupation", enrichment?.occupation],
     ["Employer", enrichment?.employer],
@@ -129,7 +135,7 @@ function ExaEnrichmentPanel({
     ["Office", enrichment?.office_held],
     ["Founded", enrichment?.founded_year],
     ["Jurisdiction", enrichment?.jurisdiction],
-  ].filter(([, value]) => value);
+  ].filter(([, value]) => hasDisplayValue(value));
 
   return (
     <section className="mt-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">

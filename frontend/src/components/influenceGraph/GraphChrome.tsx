@@ -227,7 +227,7 @@ export function NodeContextMenu({
 }) {
   const [showSearchDepth, setShowSearchDepth] = useState(false);
   const [depth, setDepth] = useState("1");
-  const parsedDepth = Math.max(1, Math.min(Number(depth) || 1, 5));
+  const parsedDepth = Math.max(1, Math.min(Number(depth) || 1, 2));
 
   return (
     <div
@@ -246,13 +246,16 @@ export function NodeContextMenu({
         showSearchDepth ? (
           <div className="border-t border-slate-100 px-3 py-2">
             <label className="block">
-              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Exa depth</span>
+              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">Depth (max 2)</span>
               <input
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={depth}
-                onChange={(event) => setDepth(event.target.value.replace(/\D/g, ""))}
+                onChange={(event) => {
+                  const nextDepth = Math.max(1, Math.min(Number(event.target.value.replace(/\D/g, "")) || 1, 2));
+                  setDepth(String(nextDepth));
+                }}
                 onKeyDown={(event) => {
                   event.stopPropagation();
                   if (event.key === "Enter") onSearchExa(parsedDepth);
