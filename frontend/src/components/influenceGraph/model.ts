@@ -65,7 +65,7 @@ export function makeInferredEdge(edge: InferredEdge, originEntityId: number): Ap
   return {
     id: `inferred-${originEntityId}-${edge.id}`,
     source: entityNodeId(edge.seed_entity_id ?? originEntityId),
-    target: entityNodeId(edge.target_entity_id ?? `inferred-${edge.id}`),
+    target: entityNodeId(edge.target_entity_id ?? Number(`9${edge.id}`)),
     type: "exaRelationship",
     animated: true,
     markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "#d97706" },

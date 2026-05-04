@@ -41,6 +41,22 @@ import type {
   RelationshipDetail,
 } from "./influenceGraph/types";
 
+function edgeLinkedExpansionNodeIds(originEntityId: number, edges: AppEdge[]) {
+  const originNodeId = entityNodeId(originEntityId);
+  const linkedNodeIds = new Set<string>([originNodeId]);
+
+  edges.forEach((edge) => {
+    if (edge.source === originNodeId) linkedNodeIds.add(edge.target);
+    if (edge.target === originNodeId) linkedNodeIds.add(edge.source);
+  });
+
+  return linkedNodeIds;
+}
+
+function countExpansionNeighbors(originEntityId: number, edges: AppEdge[]) {
+  return Math.max(0, edgeLinkedExpansionNodeIds(originEntityId, edges).size - 1);
+}
+
 export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
   const [baseNode, setBaseNode] = useState<AppNode | null>(null);
   const [expansions, setExpansions] = useState<Record<string, ExpansionRecord>>({});
@@ -140,16 +156,19 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
             : []),
         ];
         const nodeIds = new Set(nodes.map((node) => node.id));
+        const expansionEdges = edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+        const linkedNodeIds = edgeLinkedExpansionNodeIds(originEntityId, expansionEdges);
+        const expansionNodes = nodes.filter((node) => linkedNodeIds.has(node.id));
 
         setExpansions((current) => ({
           ...current,
           [key]: {
             originEntityId,
             direction,
-            nodes,
-            edges: edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target)),
+            nodes: expansionNodes,
+            edges: expansionEdges,
             inferredEdges: inferred,
-            nodeCount: Math.max(0, nodes.length - 1),
+            nodeCount: countExpansionNeighbors(originEntityId, expansionEdges),
           },
         }));
       } catch (err) {
@@ -343,7 +362,14 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
     return () => window.clearTimeout(timeout);
   }, [flowInstance, layoutedNodes.length, viewportKey]);
 
-  const inferredRows = useMemo(() => expansionList.flatMap((expansion) => expansion.inferredEdges), [expansionList]);
+  const inferredRows = useMemo(() => {
+    const seen = new Set<number>();
+    return expansionList.flatMap((expansion) => expansion.inferredEdges).filter((edge) => {
+      if (seen.has(edge.id)) return false;
+      seen.add(edge.id);
+      return true;
+    });
+  }, [expansionList]);
   const displayProfile = selectedProfile ?? profile;
   const detailProfile = selectedProfile;
   const selectedNodeSummary = useMemo(
@@ -553,7 +579,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
             nodes,
             edges,
             inferredEdges,
-            nodeCount: Math.max(0, nodes.length - 1),
+            nodeCount: countExpansionNeighbors(expansion.originEntityId, edges),
           };
         });
 
@@ -608,7 +634,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
           nodes,
           edges,
           inferredEdges,
-          nodeCount: Math.max(0, nodes.length - 1),
+          nodeCount: countExpansionNeighbors(expansion.originEntityId, edges),
         };
       });
 
@@ -695,6 +721,8 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
       const originProfile = profileCache[entityIdToSearch];
       const originNode = graphNodes.find((node) => node.data.entityId === entityIdToSearch);
       const edges = inferred.map((edge) => makeInferredEdge(edge, entityIdToSearch));
+      const nodeIds = new Set([entityNodeId(entityIdToSearch), ...nodes.map((node) => node.id)]);
+      const expansionEdges = edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
       setExpansions((current) => ({
         ...current,
         [`${entityIdToSearch}:exa`]: {
@@ -714,9 +742,9 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
             ),
             ...nodes,
           ],
-          edges,
+          edges: expansionEdges,
           inferredEdges: inferred,
-          nodeCount: nodes.length,
+          nodeCount: countExpansionNeighbors(entityIdToSearch, expansionEdges),
         },
       }));
     } catch (err) {
