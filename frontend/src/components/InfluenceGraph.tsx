@@ -459,12 +459,18 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
           }));
           return;
         }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load Exa enrichment");
+        return;
+      } finally {
+        if (!cancelled) setLoadingEnrichment(false);
+      }
 
-        if (enrichmentRequestIds.current.has(entityIdToEnrich)) return;
-        enrichmentRequestIds.current.add(entityIdToEnrich);
-        setLoadingEnrichment(false);
-        setEnhancingProfile(true);
+      if (enrichmentRequestIds.current.has(entityIdToEnrich)) return;
+      enrichmentRequestIds.current.add(entityIdToEnrich);
+      setEnhancingProfile(true);
 
+      try {
         const newEnrichment = await apiPost<EntityEnrichment>(`/entities/${entityIdToEnrich}/enrich`, {});
         if (cancelled) return;
 
@@ -477,10 +483,7 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Could not load Exa enrichment");
       } finally {
         enrichmentRequestIds.current.delete(entityIdToEnrich);
-        if (!cancelled) {
-          setLoadingEnrichment(false);
-          setEnhancingProfile(false);
-        }
+        if (!cancelled) setEnhancingProfile(false);
       }
     }
 
