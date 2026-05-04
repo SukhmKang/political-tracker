@@ -30,13 +30,13 @@ import type {
   AppEdge,
   AppNode,
   DegreeCounts,
+  DiscoverResponse,
   Direction,
   EntityEnrichment,
   EntityProfile,
   ExpansionRecord,
   InfluenceGraphProps,
   InferredEdge,
-  InferredResponse,
   NeighborhoodResponse,
   RelationshipDetail,
 } from "./influenceGraph/types";
@@ -127,12 +127,30 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
           connectedIds.add(edge.target_entity_id);
         });
 
-        const inferred = (data.inferred_edges ?? []).map((edge) => ({ ...edge, seed_entity_id: originEntityId }));
+        const inferred = (data.inferred_edges ?? []).map((edge) => ({
+          ...edge,
+          seed_entity_id: edge.seed_entity_id ?? originEntityId,
+        }));
         const inferredLimit =
           typeof limit === "number" ? Math.max(0, limit - Math.max(0, connectedIds.size - 1)) : 8;
         const inferredNodes =
           direction === "outgoing"
-            ? inferred.slice(0, inferredLimit).map((edge) =>
+            ? inferred.slice(0, inferredLimit).flatMap((edge) => [
+                ...(edge.seed_entity_id && edge.seed_entity_id !== originEntityId
+                  ? [
+                      makeEntityNode(
+                        {
+                          id: edge.seed_entity_id,
+                          name: edge.seed_entity_name ?? `Entity ${edge.seed_entity_id}`,
+                          type: null,
+                          state: null,
+                          mention_count: 0,
+                          depth: edge.depth ?? 1,
+                        },
+                        "verified",
+                      ),
+                    ]
+                  : []),
                 makeEntityNode(
                   {
                     id: edge.target_entity_id ?? Number(`9${edge.id}`),
@@ -140,11 +158,11 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
                     type: edge.target_type,
                     state: null,
                     mention_count: 0,
-                    depth: 1,
+                    depth: edge.depth ?? 1,
                   },
                   edge.verified ? "verified" : "inferred",
                 ),
-              )
+              ])
             : [];
 
         const nodes = [
@@ -699,9 +717,15 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
     setExaSearchNotice(null);
     try {
       const clampedDepth = Math.max(1, Math.min(depth, 5));
-      await apiPost("/discover", { entity_name: entityName, depth: clampedDepth, max_expand: 3 });
-      const data = await apiGet<InferredResponse>(`/entities/${entityIdToSearch}/inferred`);
-      const inferred = data.inferred_edges.map((edge) => ({ ...edge, seed_entity_id: entityIdToSearch }));
+      const data = await apiPost<DiscoverResponse>("/discover", {
+        entity_name: entityName,
+        depth: clampedDepth,
+        max_expand: 3,
+      });
+      const inferred = data.inferred_edges.map((edge) => ({
+        ...edge,
+        seed_entity_id: edge.seed_entity_id ?? entityIdToSearch,
+      }));
       const newInferredCount = inferred.filter((edge) => !existingInferredIds.has(edge.id)).length;
       if (inferred.length === 0) {
         setExaSearchNotice(`No Exa discoveries found for ${entityName}.`);
@@ -710,7 +734,22 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
       if (newInferredCount === 0) {
         setExaSearchNotice(`No new Exa discoveries found for ${entityName}.`);
       }
-      const nodes = inferred.slice(0, 10).map((edge) =>
+      const nodes = inferred.slice(0, 10).flatMap((edge) => [
+        ...(edge.seed_entity_id && edge.seed_entity_id !== entityIdToSearch
+          ? [
+              makeEntityNode(
+                {
+                  id: edge.seed_entity_id,
+                  name: edge.seed_entity_name ?? `Entity ${edge.seed_entity_id}`,
+                  type: null,
+                  state: null,
+                  mention_count: 0,
+                  depth: edge.depth ?? 1,
+                },
+                "verified",
+              ),
+            ]
+          : []),
         makeEntityNode(
           {
             id: edge.target_entity_id ?? Number(`9${edge.id}`),
@@ -718,11 +757,11 @@ export default function InfluenceGraph({ entityId }: InfluenceGraphProps) {
             type: edge.target_type,
             state: null,
             mention_count: 0,
-            depth: 1,
+            depth: edge.depth ?? 1,
           },
           edge.verified ? "verified" : "inferred",
         ),
-      );
+      ]);
       const originProfile = profileCache[entityIdToSearch];
       const originNode = graphNodes.find((node) => node.data.entityId === entityIdToSearch);
       const edges = inferred.map((edge) => makeInferredEdge(edge, entityIdToSearch));

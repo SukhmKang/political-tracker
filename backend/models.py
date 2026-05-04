@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EntityInfo(BaseModel):
@@ -75,6 +75,8 @@ class GraphEdge(BaseModel):
 
 class InferredEdge(BaseModel):
     id: int
+    seed_entity_id: Optional[int]
+    seed_entity_name: Optional[str]
     target_name: str
     target_entity_id: Optional[int]
     target_type: Optional[str]
@@ -84,6 +86,8 @@ class InferredEdge(BaseModel):
     source_domains: list[str]
     evidence_strength: Optional[str]
     found_by: list[str]
+    depth: int
+    found_from: Optional[str]
     verified: bool
     created_at: str
 
@@ -144,6 +148,7 @@ class DiscoverResponse(BaseModel):
     connections_found: int
     verified_count: int
     inferred_count: int
+    inferred_edges: list[InferredEdge] = Field(default_factory=list)
 
 
 class MergeCandidateEntity(BaseModel):

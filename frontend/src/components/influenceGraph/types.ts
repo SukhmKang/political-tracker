@@ -31,6 +31,8 @@ export interface ApiGraphEdge {
 
 export interface ApiInferredEdge {
   id: number;
+  seed_entity_id?: number | null;
+  seed_entity_name?: string | null;
   target_name: string;
   target_entity_id: number | null;
   target_type: string | null;
@@ -40,6 +42,8 @@ export interface ApiInferredEdge {
   source_domains: string[];
   evidence_strength: string | null;
   found_by: string[];
+  depth?: number;
+  found_from?: string | null;
   verified: boolean;
   created_at: string;
 }
@@ -51,8 +55,13 @@ export interface NeighborhoodResponse {
   inferred_edges?: ApiInferredEdge[] | null;
 }
 
-export interface InferredResponse {
-  entity_id: number;
+export interface DiscoverResponse {
+  run_id: string;
+  seed_entity_id: number | null;
+  seed_entity_name: string;
+  connections_found: number;
+  verified_count: number;
+  inferred_count: number;
   inferred_edges: ApiInferredEdge[];
 }
 

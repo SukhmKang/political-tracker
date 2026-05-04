@@ -12,12 +12,15 @@ from models import (
 router = APIRouter()
 
 _INFERRED_SELECT = """
-    SELECT id, target_name, target_entity_id, target_type, relationship_type,
+    SELECT id, seed_entity_id, seed_entity_name,
+           target_name, target_entity_id, target_type, relationship_type,
            COALESCE(evidence_quotes, '{}'),
            COALESCE(source_urls, '{}'),
            COALESCE(source_domains, '{}'),
            evidence_strength,
            COALESCE(found_by, '{}'),
+           COALESCE(depth, 1),
+           found_from,
            verified,
            created_at
     FROM unified.inferred_edges
@@ -38,17 +41,21 @@ _INFERRED_ORDER = """
 def _build_inferred_edge(r: tuple) -> InferredEdge:
     return InferredEdge(
         id=r[0],
-        target_name=r[1],
-        target_entity_id=r[2],
-        target_type=r[3],
-        relationship_type=r[4],
-        evidence_quotes=list(r[5] or []),
-        source_urls=list(r[6] or []),
-        source_domains=list(r[7] or []),
-        evidence_strength=r[8],
-        found_by=list(r[9] or []),
-        verified=r[10],
-        created_at=r[11].isoformat() if r[11] else "",
+        seed_entity_id=r[1],
+        seed_entity_name=r[2],
+        target_name=r[3],
+        target_entity_id=r[4],
+        target_type=r[5],
+        relationship_type=r[6],
+        evidence_quotes=list(r[7] or []),
+        source_urls=list(r[8] or []),
+        source_domains=list(r[9] or []),
+        evidence_strength=r[10],
+        found_by=list(r[11] or []),
+        depth=int(r[12] or 1),
+        found_from=r[13],
+        verified=r[14],
+        created_at=r[15].isoformat() if r[15] else "",
     )
 
 

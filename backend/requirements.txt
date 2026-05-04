@@ -5,6 +5,7 @@ psycopg-pool
 pydantic
 python-dotenv
 google-genai
+anthropic
 exa-py
 openai-agents
 asyncio

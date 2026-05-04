@@ -1,5 +1,7 @@
 import asyncio
 import re
+import sys
+import traceback
 import uuid
 from typing import Optional
 
@@ -8,9 +10,56 @@ from fastapi import APIRouter, HTTPException
 
 from agent import main as run_agent
 from db import db, gemini, get_agent_inferred_run_id
-from models import DiscoverRequest, DiscoverResponse
+from models import DiscoverRequest, DiscoverResponse, InferredEdge
 
 router = APIRouter()
+
+_INFERRED_SELECT = """
+    SELECT id, seed_entity_id, seed_entity_name,
+           target_name, target_entity_id, target_type, relationship_type,
+           COALESCE(evidence_quotes, '{}'),
+           COALESCE(source_urls, '{}'),
+           COALESCE(source_domains, '{}'),
+           evidence_strength,
+           COALESCE(found_by, '{}'),
+           COALESCE(depth, 1),
+           found_from,
+           verified,
+           created_at
+    FROM unified.inferred_edges
+"""
+
+_INFERRED_ORDER = """
+    ORDER BY
+        CASE evidence_strength
+            WHEN 'direct'   THEN 1
+            WHEN 'indirect' THEN 2
+            WHEN 'weak'     THEN 3
+            ELSE 4
+        END,
+        created_at DESC
+"""
+
+
+def _build_inferred_edge(r: tuple) -> InferredEdge:
+    return InferredEdge(
+        id=r[0],
+        seed_entity_id=r[1],
+        seed_entity_name=r[2],
+        target_name=r[3],
+        target_entity_id=r[4],
+        target_type=r[5],
+        relationship_type=r[6],
+        evidence_quotes=list(r[7] or []),
+        source_urls=list(r[8] or []),
+        source_domains=list(r[9] or []),
+        evidence_strength=r[10],
+        found_by=list(r[11] or []),
+        depth=int(r[12] or 1),
+        found_from=r[13],
+        verified=r[14],
+        created_at=r[15].isoformat() if r[15] else "",
+    )
 
 
 async def _fuzzy_match_entity(conn: psycopg.AsyncConnection, name: str, threshold: float = 0.4) -> Optional[int]:
@@ -46,8 +95,16 @@ def _llm_pick_entity(name: str, candidates: list[tuple]) -> Optional[int]:
         "Does any candidate refer to the same real-world entity as the new entity? "
         "Reply with ONLY the number of the best match (1, 2, 3 …) or the word 'none'."
     )
-    response = gemini.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
-    answer = response.text.strip().lower()
+    try:
+        response = gemini.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    except Exception as exc:
+        print(
+            f"  [!] Entity resolution LLM failed for {name!r} ({type(exc).__name__}: {exc})",
+            file=sys.stderr,
+        )
+        traceback.print_exc(file=sys.stderr)
+        return None
+    answer = (response.text or "").strip().lower()
     if "none" in answer:
         return None
     m = re.search(r"\d+", answer)
@@ -62,7 +119,7 @@ async def _resolve_entity(
     conn: psycopg.AsyncConnection,
     name: str,
     entity_type: Optional[str] = None,
-) -> tuple[int, bool]:
+) -> tuple[Optional[int], bool]:
     if not name:
         return None, False
 
@@ -109,17 +166,35 @@ async def discover(req: DiscoverRequest):
     try:
         output = await run_agent(req.entity_name, req.depth, req.max_expand)
     except Exception as exc:
+        print(f"[!] /discover agent failed for {req.entity_name!r}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         raise HTTPException(status_code=500, detail=f"Agent failed: {exc}") from exc
 
     connections = output.get("connections", [])
 
-    resolved = await asyncio.gather(*[
-        _resolve_entity(conn, c.get("target_name", ""), c.get("target_type"))
+    resolution_tasks: dict[tuple[str, Optional[str]], asyncio.Task[tuple[Optional[int], bool]]] = {}
+
+    async def resolve_cached(name: str, entity_type: Optional[str] = None) -> tuple[Optional[int], bool]:
+        key = (name.lower().strip(), entity_type)
+        if key not in resolution_tasks:
+            resolution_tasks[key] = asyncio.create_task(_resolve_entity(conn, name, entity_type))
+        return await resolution_tasks[key]
+
+    target_resolutions = await asyncio.gather(*[
+        resolve_cached(c.get("target_name", ""), c.get("target_type"))
         for c in connections
     ])
+    source_names = [
+        (c.get("found_from") or req.entity_name).strip() or req.entity_name
+        for c in connections
+    ]
+    source_resolutions = await asyncio.gather(*[
+        resolve_cached(source_name)
+        for source_name in source_names
+    ])
 
-    verified_count = sum(1 for _, was_existing in resolved if was_existing)
-    inferred_count = len(resolved) - verified_count
+    verified_count = sum(1 for _, was_existing in target_resolutions if was_existing)
+    inferred_count = len(target_resolutions) - verified_count
 
     async with conn.cursor() as cur:
         await cur.executemany(
@@ -133,8 +208,8 @@ async def discover(req: DiscoverRequest):
             """,
             [
                 (
-                    seed_entity_id,
-                    req.entity_name,
+                    source_entity_id or seed_entity_id,
+                    source_name,
                     c.get("target_name", ""),
                     target_entity_id,
                     c.get("target_type"),
@@ -149,9 +224,12 @@ async def discover(req: DiscoverRequest):
                     was_existing,
                     run_id,
                 )
-                for c, (target_entity_id, was_existing) in zip(connections, resolved)
+                for c, source_name, (source_entity_id, _), (target_entity_id, was_existing)
+                in zip(connections, source_names, source_resolutions, target_resolutions)
             ],
         )
+        await cur.execute(_INFERRED_SELECT + "WHERE run_id = %s" + _INFERRED_ORDER, (run_id,))
+        inferred_edges = [_build_inferred_edge(r) for r in await cur.fetchall()]
 
     return DiscoverResponse(
         run_id=run_id,
@@ -160,4 +238,5 @@ async def discover(req: DiscoverRequest):
         connections_found=len(connections),
         verified_count=verified_count,
         inferred_count=inferred_count,
+        inferred_edges=inferred_edges,
     )
